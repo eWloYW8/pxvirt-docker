@@ -1,0 +1,2 @@
+ADMIN_PASSWORD=yourpassword
+ENABLE_PVE_FIREWALL=yes

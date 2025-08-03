@@ -1,0 +1,58 @@
+FROM debian:bookworm
+
+ENV SERVICE=pxvirt-docker \
+    DEBIAN_FRONTEND=noninteractive
+
+LABEL maintainer="docker-dario@neomediatech.it" \ 
+      org.label-schema.vcs-type=Git \
+      org.label-schema.vcs-url=https://github.com/Neomediatech/${SERVICE} \
+      org.label-schema.maintainer=Neomediatech
+
+# set apt config
+RUN echo 'APT::Get::Assume-Yes "1";' > /etc/apt/apt.conf.d/00-custom && \
+    echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-custom && \
+    echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-custom
+
+# debian mirror
+RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources
+
+# install base pkg
+RUN apt update && \
+    apt install wget nano vim curl gnupg ca-certificates rsyslog net-tools iputils-ping tini \
+                    sudo systemd systemd-sysv dbus dbus-user-session && \
+    rm -rf /var/lib/apt/lists/* /tmp/*
+
+RUN printf '#!/bin/sh\nexit 0' > /usr/sbin/policy-rc.d && \
+    printf "systemctl start systemd-logind" >> /etc/profile
+
+# add PVE repository
+RUN curl -L https://mirrors.lierfang.com/pxcloud/lierfang.gpg -o /etc/apt/trusted.gpg.d/lierfang.gpg && \
+    echo "deb https://mirrors.lierfang.com/pxcloud/pxvirt bookworm main" > /etc/apt/sources.list.d/pxvirt-sources.list
+
+
+# Deny initramfs updates
+RUN apt update && \
+    apt install initramfs-tools && \
+    rm -rf /var/lib/apt/lists/* /tmp/* && \
+    echo '#!/bin/bash' > /usr/sbin/update-initramfs && \
+    echo 'exit 0' >> /usr/sbin/update-initramfs && \
+    chmod +x /usr/sbin/update-initramfs
+
+RUN apt update && \
+    apt -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install proxmox-ve postfix open-iscsi chrony
+RUN rm -rf /var/lib/apt/lists/* /tmp/* /etc/apt/sources.list.d/pve-enterprise.list && \
+    sed -i 's/^ConditionVirtualization=!container$/#ConditionVirtualization=!container/' /lib/systemd/system/lxcfs.service
+
+#set (temporary) password for root
+RUN echo "root:root"|chpasswd
+
+COPY entrypoint.sh /
+
+RUN sed -i '/imklog/s/^/#/' /etc/rsyslog.conf && \
+    echo '*.* -/proc/1/fd/1' >> /etc/rsyslog.conf && \
+    chmod +x /entrypoint.sh
+
+STOPSIGNAL SIGINT
+ENTRYPOINT [ "/entrypoint.sh" ]
+CMD [ "/sbin/init"]
+

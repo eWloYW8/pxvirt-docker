@@ -1,0 +1,35 @@
+services:
+  pxvirt:
+    container_name: ${NAME:-pxvirt}
+    image: ${IMAGE:-pxvirt}
+    hostname: ${NAME:-pxvirt}
+
+    ports:
+      - "8006:8006"
+
+    privileged: true
+
+    devices:
+      - /dev/fuse
+      - /dev/kvm
+
+    tmpfs:
+      - /tmp
+      - /run
+      - /run/lock
+
+    extra_hosts:
+      - "${NAME:-pxvirt}:127.0.0.1"
+
+    env_file:
+      - .envs
+
+    volumes:
+      - ${BASE_PATH}/data/logs:/var/log
+      - ${BASE_PATH}/data/pve_cluster:/var/lib/pve-cluster
+      - ${BASE_PATH}/data/pve_manager:/var/lib/pve-manager
+      - ${BASE_PATH}/data/bin:/srv/bin
+      - ${BASE_PATH}/data/network:/etc/network
+      - /mnt/sda1:/mnt/sda1
+
+    restart: unless-stopped
